@@ -19,8 +19,7 @@ class PlanResult:
     reason: str
 
 
-def rrt(start, collision, goal, step=0.4, max_iterations=12000,
-        goal_bias=0.15, time_budget=1.5, seed=7):
+def rrt(start, collision, goal, step=0.4, max_iterations=12000, goal_bias=0.15, time_budget=1.5, seed=7):
     begin = time.perf_counter()
     rng = random.Random(seed)
     start = tuple(start[:2])
