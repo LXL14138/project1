@@ -1,12 +1,10 @@
 import math
-
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import OccupancyGrid, Path
 
 
 def quaternion_yaw(q):
     return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
-
 
 def rrt_path_to_ros_path(path, frame_id, stamp):
     msg = Path()
@@ -23,6 +21,9 @@ def rrt_path_to_ros_path(path, frame_id, stamp):
         pose.pose.orientation.z, pose.pose.orientation.w = math.sin(yaw / 2), math.cos(yaw / 2)
         msg.poses.append(pose)
     return msg
+
+
+
 
 
 def grid_to_message(grid, frame_id, stamp):
