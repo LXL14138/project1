@@ -2,18 +2,14 @@ import math
 import random
 import time
 from dataclasses import dataclass
-
 import numpy as np
-
 
 def in_goal(point, goal):
     x, y, w, h = goal
     return x <= point[0] <= x + w and y <= point[1] <= y + h
 
-
 def path_length(path):
     return sum(math.dist(a[:2], b[:2]) for a, b in zip(path, path[1:]))
-
 
 @dataclass
 class PlanResult:
@@ -28,10 +24,8 @@ def rrt(start, collision, goal, step=0.4, max_iterations=12000,
     begin = time.perf_counter()
     rng = random.Random(seed)
     start = tuple(start[:2])
-
     def result(path, iteration, reason):
         return PlanResult(path, time.perf_counter() - begin, iteration, reason)
-
     if not collision.valid(start):
         return result([], 0, "start_blocked")
     if in_goal(start, goal):
@@ -51,6 +45,8 @@ def rrt(start, collision, goal, step=0.4, max_iterations=12000,
         else:
             target = (rng.uniform(ox + r, ox + collision.width - r),
                       rng.uniform(oy + r, oy + collision.height - r))
+
+        
         delta = nodes[:count] - target
         nearest = int(np.argmin(np.einsum('ij,ij->i', delta, delta)))
         parent = nodes[nearest]
