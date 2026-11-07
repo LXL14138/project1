@@ -40,8 +40,7 @@ class Q2NavigationNode(Node):
         super().__init__('q2_navigation')
         self.start_pose = tuple(start) if start is not None else (C.START_X, C.START_Y, C.START_YAW)
         self.goal = tuple(goal) if goal is not None else C.GOAL
-        self.grid = GridMap(C.WORLD_WIDTH, C.WORLD_HEIGHT, C.GRID_RESOLUTION,
-                            (C.MAP_ORIGIN_X, C.MAP_ORIGIN_Y))
+        self.grid = GridMap(C.WORLD_WIDTH, C.WORLD_HEIGHT, C.GRID_RESOLUTION, (C.MAP_ORIGIN_X, C.MAP_ORIGIN_Y))
         self.pose = self.offset = self.collision = self.pending_scan = None
         self.odom_frame = self.base_frame = None
         self.odom_stamp = self.scan_stamp = -math.inf
@@ -61,10 +60,8 @@ class Q2NavigationNode(Node):
         self.cmd_pub = self.create_publisher(Twist, C.CMD_VEL_TOPIC, 10)
         self.map_pub = self.create_publisher(OccupancyGrid, '/q2/map', retained)
         self.path_pub = self.create_publisher(Path, '/q2/path', retained)
-        self.odom_sub = self.create_subscription(Odometry, C.ODOM_TOPIC, self.on_odom,
-                                                  qos_profile_sensor_data)
-        self.scan_sub = self.create_subscription(LaserScan, C.SCAN_TOPIC, self.on_scan,
-                                                  qos_profile_sensor_data)
+        self.odom_sub = self.create_subscription(Odometry, C.ODOM_TOPIC, self.on_odom, qos_profile_sensor_data)
+        self.scan_sub = self.create_subscription(LaserScan, C.SCAN_TOPIC, self.on_scan, qos_profile_sensor_data)
         log_dir = FilePath(C.LOG_DIRECTORY).expanduser()
         log_dir.mkdir(parents=True, exist_ok=True)
         self.log_path = log_dir / (datetime.now().strftime('%Y%m%d_%H%M%S_%f') + '.csv')
@@ -74,34 +71,41 @@ class Q2NavigationNode(Node):
                            'result', 'planned_path_m', 'travelled_distance_m'])
         self.log_file.flush()
         self.timer = self.create_timer(C.CONTROL_PERIOD, self.tick)
-        self.get_logger().info(f'Q2 navigation ready. Start={self.start_pose}, goal={self.goal}. '
-                               f'Planning log: {self.log_path}')
+        self.get_logger().info(f'Q2 navigation ready. Start={self.start_pose}, goal={self.goal}. 'f'Planning log: {self.log_path}')
 
         control_path = self.log_path.with_name(self.log_path.stem + '_controls.csv')
         self.control_file = control_path.open('w', newline='', encoding='utf-8')
         self.control_log = csv.writer(self.control_file)
-        self.control_log.writerow(['attempt', 'control_index', 'v', 'omega', 'tau',
-                                   'start_sim_s', 'end_sim_s', 'actual_duration_s', 'reason'])
+        self.control_log.writerow(['attempt', 'control_index', 'v', 'omega', 'tau', 'start_sim_s', 'end_sim_s', 'actual_duration_s', 'reason'])
         self.control_file.flush()
 
     def now(self):
         return self.get_clock().now().nanoseconds / 1e9
 
+    
     @staticmethod
     def seconds(stamp):
         return stamp.sec + stamp.nanosec / 1e9
 
+
+    
     def on_odom(self, msg):
         if self.finished or not msg.header.frame_id or not msg.child_frame_id:
             return
+            
         stamp = self.seconds(msg.header.stamp)
         if stamp < self.odom_stamp:
             self.stop_run('Simulation reset: restart this node.')
             return
+
+        
         p, q = msg.pose.pose.position, msg.pose.pose.orientation
         odom_pose = (p.x, p.y, quaternion_yaw(q))
+        
         if not all(math.isfinite(v) for v in odom_pose):
             return
+
+        
         if self.offset is None:
             self.odom_frame, self.base_frame = msg.header.frame_id, msg.child_frame_id
             self.offset = anchor_transform(odom_pose, self.start_pose)
@@ -112,27 +116,36 @@ class Q2NavigationNode(Node):
             t.transform.rotation.z = math.sin(self.offset[2] / 2)
             t.transform.rotation.w = math.cos(self.offset[2] / 2)
             self.tf_broadcaster.sendTransform(t)
+            
         elif (self.odom_frame, self.base_frame) != (msg.header.frame_id, msg.child_frame_id):
             self.stop_run('Odometry frames changed: restart this node.')
             return
+            
         self.pose = compose(self.offset, odom_pose)
+        
         if self.previous_pose is not None:
             self.distance += math.dist(self.pose[:2], self.previous_pose[:2])
         self.previous_pose, self.odom_stamp = self.pose, stamp
+
+        
         if not self.trajectory or math.dist(self.pose[:2], self.trajectory[-1][:2]) > 0.01:
             self.trajectory.append(self.pose)
 
     def on_scan(self, msg):
         stamp = self.seconds(msg.header.stamp)
+        
         if not msg.header.frame_id or stamp <= self.scan_stamp:
             return
+            
         if (self.pending_scan is None or
                 stamp - self.seconds(self.pending_scan.header.stamp) >= C.INPUT_TIMEOUT):
             self.pending_scan = msg
 
     def update_map(self):
+        
         if self.pending_scan is None or self.pose is None:
             return
+            
         scan = self.pending_scan
         try:
             t = self.tf_buffer.lookup_transform(
@@ -160,8 +173,8 @@ class Q2NavigationNode(Node):
         if self.control_started is not None:
             now = self.now()
             v, omega = self.controls[self.control_index]
-            self.control_log.writerow([self.attempts, self.control_index, v, omega, C.TAU,
-                                       self.control_started, now, now-self.control_started, reason])
+            self.control_log.writerow([self.attempts, self.control_index, v, omega, C.TAU,self.control_started, 
+                                       now, now-self.control_started, reason])
             self.control_file.flush()
             self.control_started = None
 
@@ -178,10 +191,11 @@ class Q2NavigationNode(Node):
         if self.now() < self.next_plan_time:
             return
         self.attempts += 1
-        result = kinodynamic_rrt(self.pose, self.collision, self.goal, C.TAU,
-                                 C.MAX_ITERATIONS, C.GOAL_SAMPLE_RATE, C.TIME_BUDGET,
+        result = kinodynamic_rrt(self.pose, self.collision, self.goal, C.TAU,C.MAX_ITERATIONS, 
+                                 C.GOAL_SAMPLE_RATE, C.TIME_BUDGET,
                                  C.RANDOM_SEED + self.attempts - 1, C.CONTROLS,
                                  initial_horizon=C.INPUT_TIMEOUT+2*C.CONTROL_PERIOD)
+        
         self.states, self.controls = result.states, result.controls
         self.path = dense_trajectory(self.states, self.controls, C.TAU)
         self.last_plan_time = self.now()
