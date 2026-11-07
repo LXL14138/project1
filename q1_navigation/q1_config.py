@@ -1,14 +1,18 @@
 MAP_ORIGIN_X, MAP_ORIGIN_Y = -5.0, -5.0
 WORLD_WIDTH, WORLD_HEIGHT = 10.0, 10.0
 START_X, START_Y, START_YAW = -4.0, -4.0, 0.0
-GOAL = (3.65, 3.65, 0.7, 0.7)  # lower-left x, y, width, height: 0.7 m square centred at (4, 4)
+GOAL = (3.65, 3.65, 0.7, 0.7)  # 0.7 m square centred at (4, 4)
 SCAN_TOPIC, ODOM_TOPIC, CMD_VEL_TOPIC = '/scan', '/odom', '/cmd_vel'
 MAP_FRAME = 'q1_map'
+
 
 # Project constraints.
 ROBOT_RADIUS = 0.25
 SENSOR_RANGE = 1.0
 MAX_LINEAR_SPEED, MAX_ANGULAR_SPEED = 0.25, 1.82
+
+
+
 
 GRID_RESOLUTION, SAFETY_MARGIN = 0.05, 0.03
 RRT_STEP, RRT_GOAL_BIAS = 0.2, 0.3
