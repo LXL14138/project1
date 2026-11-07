@@ -28,7 +28,6 @@ def propagate(pose, linear, angular, dt):
 
 
 def command_safe(pose, linear, angular, collision, horizon):
-    """Check the swept disk along the actual commanded arc in known free space."""
     n = max(1, math.ceil(horizon / 0.05))
     previous = pose
     for i in range(1, n + 1):
