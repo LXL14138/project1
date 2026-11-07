@@ -20,6 +20,7 @@ from . import q1_config as C
 from .q1_control import anchor_transform, command_safe, compose, tracking_command
 from .q1_mapping import GridMap, process_scan
 from .q1_planner import in_goal, path_length, rrt
+from .run_plot import next_result_path, save_run_plot
 from .q1_ros_utils import grid_to_message, quaternion_yaw, rrt_path_to_ros_path
 
 
@@ -38,6 +39,9 @@ class Q1NavigationNode(Node):
         self.previous_pose = None
         self.last_plan_time = -math.inf
         self.finished = False
+        self.trajectory, self.plans = [], []
+        self.run_status = 'Interrupted'
+        self.result_path = next_result_path('q1')
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = StaticTransformBroadcaster(self)
@@ -96,6 +100,8 @@ class Q1NavigationNode(Node):
         if self.previous_pose is not None:
             self.distance += math.dist(self.pose[:2], self.previous_pose[:2])
         self.previous_pose, self.odom_stamp = self.pose, stamp
+        if not self.trajectory or math.dist(self.pose[:2], self.trajectory[-1][:2]) > 0.01:
+            self.trajectory.append(self.pose)
 
     def on_scan(self, msg):
         stamp = self.seconds(msg.header.stamp)
@@ -144,6 +150,8 @@ class Q1NavigationNode(Node):
         self.log.writerow([self.attempts, self.attempts - 1, reason, result.runtime,
                            result.reason, path_length(result.path), self.distance])
         self.log_file.flush()
+        if self.path:
+            self.plans.append(list(self.path))
         self.path_pub.publish(rrt_path_to_ros_path(self.path, C.MAP_FRAME,
                                                    self.get_clock().now().to_msg()))
         self.get_logger().info(f'Plan {self.attempts}: {result.reason}, {result.runtime:.3f}s; '
@@ -189,10 +197,22 @@ class Q1NavigationNode(Node):
     def stop_run(self, reason):
         self.finished = True
         self.command()
+        self.run_status = reason
+        self.save_plot()
         self.get_logger().info(f'{reason}; replans={max(0, self.attempts-1)}; '
                                f'travelled={self.distance:.3f}m')
 
+    def save_plot(self):
+        try:
+            save_run_plot(self.result_path, 'q1', self.grid, self.collision,
+                          self.start_pose, self.goal, C.ROBOT_RADIUS, self.trajectory,
+                          self.plans, self.run_status, max(0, self.attempts-1), self.distance)
+            self.get_logger().info(f'Run plot saved: {self.result_path}')
+        except Exception as error:  # never let plotting break shutdown
+            self.get_logger().error(f'Could not save run plot: {error}')
+
     def close(self):
+        self.save_plot()
         if rclpy.ok():
             self.command()
         self.log_file.close()
