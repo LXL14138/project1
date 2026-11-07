@@ -6,9 +6,7 @@ UNKNOWN, FREE, OCCUPIED = -1, 0, 100
 
 
 def process_scan(ranges, angle_min, angle_increment, range_min, range_max, cap=1.0):
-    """Yield (angle, distance, hit); no endpoint beyond cap enters the map."""
-    if not (math.isfinite(range_min) and math.isfinite(range_max)
-            and 0.0 <= range_min < range_max and cap > range_min):
+    if not (math.isfinite(range_min) and math.isfinite(range_max) and 0.0 <= range_min < range_max and cap > range_min):
         return []
     if not (math.isfinite(angle_min) and math.isfinite(angle_increment)):
         return []
@@ -22,8 +20,7 @@ def process_scan(ranges, angle_min, angle_increment, range_min, range_max, cap=1
             if value > 0:
                 rays.append((angle_min + index * angle_increment, limit, False))
         elif value <= range_max:
-            rays.append((angle_min + index * angle_increment,
-                         min(value, limit), value <= limit))
+            rays.append((angle_min + index * angle_increment, min(value, limit), value <= limit))
     return rays
 
 
@@ -35,22 +32,15 @@ class GridMap:
         self.origin = tuple(origin)
         self.width = width
         self.height = height
-        self.data = np.full((math.ceil(height / resolution), math.ceil(width / resolution)),
-                            UNKNOWN, dtype=np.int8)
+        self.data = np.full((math.ceil(height / resolution), math.ceil(width / resolution)), UNKNOWN, dtype=np.int8)
 
     def cell(self, x, y):
-        return (math.floor((x - self.origin[0]) / self.resolution),
-                math.floor((y - self.origin[1]) / self.resolution))
+        return (math.floor((x - self.origin[0]) / self.resolution), math.floor((y - self.origin[1]) / self.resolution))
 
     def inside(self, ix, iy):
         return 0 <= iy < self.data.shape[0] and 0 <= ix < self.data.shape[1]
 
     def seed_robot_footprint(self, pose, radius):
-        """Only the physical area currently occupied by the robot is assumed free.
-
-        This closes the sensor's blind spot; it does not reveal surrounding space
-        and never overwrites an observed obstacle.
-        """
         x, y = pose[:2]
         ix, iy = self.cell(x, y)
         n = math.ceil(radius / self.resolution) + 1
@@ -63,12 +53,9 @@ class GridMap:
                 if dx * dx + dy * dy <= radius * radius and self.data[row, col] == UNKNOWN:
                     self.data[row, col] = FREE
 
-    def update(self, rays, lidar_pose, range_min):
-        """Last observation wins; hits take precedence over free rays in a scan.
 
-        All four corners of a cleared cell must be within the clipped ray radius.
-        Endpoints behind an obstacle are never cleared. No ground truth is used.
-        """
+    
+    def update(self, rays, lidar_pose, range_min):
         lx, ly, yaw = lidar_pose
         free, occupied = set(), set()
         for angle, distance, hit in rays:
@@ -101,11 +88,6 @@ class GridMap:
 
 
 def inflate(mask, radius, resolution):
-    """Mark cells whose squares are within radius of a blocked cell square.
-
-    Accounting for BOTH squares makes a point query conservative even near a
-    cell corner. No external planner or morphology library is used.
-    """
     rows, cols = mask.shape
     out = np.zeros_like(mask, dtype=bool)
     reach = math.ceil(radius / resolution) + 1
@@ -123,7 +105,6 @@ def inflate(mask, radius, resolution):
 
 
 class CollisionView:
-    """Immutable masks: unknown allowed for planning, blocked for execution."""
     def __init__(self, grid, radius):
         self.origin, self.resolution = grid.origin, grid.resolution
         self.width, self.height = grid.width, grid.height
@@ -142,7 +123,6 @@ class CollisionView:
         return not bool((self.optimistic if allow_unknown else self.strict)[iy, ix])
 
     def edge_free(self, start, end, allow_unknown=True):
-        # Extra half-cell sampling plus conservative cell-square inflation.
         n = max(1, math.ceil(math.dist(start[:2], end[:2]) / (self.resolution / 2)))
         return all(self.valid((start[0] + (end[0] - start[0]) * k / n,
                                start[1] + (end[1] - start[1]) * k / n), allow_unknown)
