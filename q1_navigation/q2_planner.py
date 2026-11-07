@@ -81,7 +81,6 @@ def dense_trajectory(states, controls, tau=C.TAU):
 
 
 def reference_path(states, collision, goal, deadline):
-    """Shortcut the RRT route into a collision-checked XY guide."""
     if time.perf_counter() >= deadline:
         return [], []
     points = [tuple(state[:2]) for state in states]
@@ -130,9 +129,7 @@ def steering_change(controls):
     return sum(abs(current - previous) for previous, current in zip(rates, rates[1:]))
 
 
-def follow_reference(states, sequence, collision, goal, tau, controls, initial_controls,
-                     deadline):
-    """Keep the RRT solution unless a smoother, feasible replay reaches the goal."""
+def follow_reference(states, sequence, collision, goal, tau, controls, initial_controls, deadline):
     reference, distances = reference_path(states, collision, goal, deadline)
     if len(reference) < 2:
         return states, sequence
@@ -183,8 +180,7 @@ def follow_reference(states, sequence, collision, goal, tau, controls, initial_c
     return states, sequence
 
 
-def kinodynamic_rrt(start, collision, goal, tau=C.TAU, max_iterations=C.MAX_ITERATIONS,
-                    goal_bias=C.GOAL_SAMPLE_RATE, time_budget=C.TIME_BUDGET,
+def kinodynamic_rrt(start, collision, goal, tau=C.TAU, max_iterations=C.MAX_ITERATIONS, goal_bias=C.GOAL_SAMPLE_RATE, time_budget=C.TIME_BUDGET,
                     seed=7, controls=C.CONTROLS, initial_horizon=None):
     if not math.isfinite(tau) or tau <= 0:
         raise ValueError('tau must be positive and finite')
@@ -202,8 +198,7 @@ def kinodynamic_rrt(start, collision, goal, tau=C.TAU, max_iterations=C.MAX_ITER
         return result([start], [], 0, 'already_in_goal')
     initial_controls = controls
     if initial_horizon is not None:
-        initial_controls = tuple((v, w) for v, w in controls if (v != 0 or w != 0)
-                                 and trajectory_collision_free(start, v, w, collision,
+        initial_controls = tuple((v, w) for v, w in controls if (v != 0 or w != 0) and trajectory_collision_free(start, v, w, collision,
                                                                initial_horizon, False))
         if not initial_controls:
             return result([], [], 0, 'local_motion_blocked')
@@ -239,7 +234,6 @@ def kinodynamic_rrt(start, collision, goal, tau=C.TAU, max_iterations=C.MAX_ITER
                 current = parents[current]
             states.reverse()
             sequence.reverse()
-            states, sequence = follow_reference(states, sequence, collision, goal, tau, controls,
-                                                initial_controls, deadline)
+            states, sequence = follow_reference(states, sequence, collision, goal, tau, controls, initial_controls, deadline)
             return result(states, sequence, iteration, 'success')
     return result([], [], max_iterations, 'iteration_limit')
