@@ -184,7 +184,7 @@ class Q1NavigationNode(Node):
                                                    self.get_clock().now().to_msg()))
         self.get_logger().info(f'Plan {self.attempts}: {result.reason}, {result.runtime:.3f}s; '
                                f'replans={self.attempts - 1}')
-        # Return to executor so fresh scan/odom callbacks run before driving.
+
 
     def tick(self):
         if self.finished:
