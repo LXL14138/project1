@@ -1,0 +1,189 @@
+Scope: Q1 geometric RRT and Q2 kinodynamic RRT, without YAML configuration.
+Current configuration/layout: see "Module separation"; latest fix: "Q2 execution fix".
+Earlier sections record checks performed before the separation/origin update.
+Environment: user's WSL Ubuntu-22.04, Ubuntu 22.04.5 LTS, ROS 2 Humble,
+Python 3.10.12, numpy 1.21.5, TurtleBot3 Waffle Pi.
+
+Build:
+  colcon build --symlink-install --packages-select q1_navigation
+  Result: 1 package finished successfully.
+
+Core checks:
+  colcon test --packages-select q1_navigation
+  colcon test-result --test-result-base build/q1_navigation --verbose
+  Result: 17 tests, 0 errors, 0 failures, 0 skipped.
+  Covered: 1 m range clipping; invalid scan values; free/occupied updates;
+  occlusion; lidar transform; robot footprint; unknown-space execution rejection;
+  radius inflation; boundaries; negative map origin; yaw alignment;
+  exact differential-drive propagation; curved-command collision;
+  RRT around a wall; impossible-path time budget; configurable goal region.
+
+ROS packaging:
+  ros2 pkg executables q1_navigation -> q1_navigation q1_navigation
+  ros2 launch q1_navigation q1.launch.py --show-args
+  -> start_x, start_y, start_yaw, goal_x, goal_y, goal_width, goal_height.
+
+Argparse update verification:
+  Rebuilt successfully in the same Ubuntu/Humble workspace.
+  python3 -m pytest src/q1_navigation/test -q -> 17 passed.
+  ros2 run supports --start X Y YAW and --goal X Y WIDTH HEIGHT.
+  Verified non-default values through actual ros2 run and ros2 launch processes.
+  Verified use_sim_time=true and node-name remapping still work with argparse.
+  Verified omitted flags retain q1_config.py defaults and negative numbers parse.
+  Verified invalid numbers, dimensions, incomplete flags, and misspelled flags fail.
+  Verified supplied start anchors odometry; supplied goal reaches RRT and stop check.
+  These were isolated ROS checks, without running another Gazebo experiment.
+
+TF waiting update verification:
+  python3 -m pytest /home/arrri/turtlebot3_ws/src/q1_navigation/test -q
+  Result: 19 passed (the existing 17 checks plus 2 TF waiting regressions).
+  Reproduced a connected TF tree with odometry TF arriving 10 ms after scan time.
+  Previous latest-scan replacement: 0 of 20 scan-time lookups could succeed.
+  Pending-scan retention: 10 of 20 cycles mapped a scan at its correct timestamp.
+  Verified stale pending scans are eventually replaced.
+  Warnings now include target/source frames, scan timestamp, and TF exception.
+  Repeated the isolated headless Waffle Pi Gazebo smoke check after this fix:
+  25 scans, 145 odometry messages, 12 maps, 1 path, 33 velocity messages;
+  odometry displacement 0.226851 m; final command linear=0, angular=0.
+  The partner's specific environment has not been retested by this agent.
+
+Gazebo integration smoke check:
+  Headless Gazebo empty world, Waffle Pi, isolated ROS_DOMAIN_ID=76,
+  isolated Gazebo port 11376. All test processes stopped afterward.
+  Received 23 scans, 138 odometry messages, 12 map messages, 1 path.
+  Received 28 velocity messages, including 16 with nonzero forward speed.
+  Measured odometry displacement: 0.226785 m.
+  All sampled speeds within 0.25 m/s and 1.82 rad/s.
+  Last velocity after Ctrl+C: linear=0, angular=0.
+
+Limits of verification:
+  This verifies package build, core logic, and live Gazebo interfaces only.
+  It does not establish success in the four required obstacle environments,
+  goal-reaching performance across those environments, collision-free operation,
+  or Q3 dynamic-obstacle demonstrations.
+  Those experiments remain with the partner as agreed.
+
+Installed source: /home/arrri/turtlebot3_ws/src/q1_navigation
+Configuration: q1_navigation/q1_config.py (Python, no YAML).
+
+Q2 / 1.2 addition (2026-11-06):
+  Adapted the user's original 1.2.py; the original file was not modified.
+  Added q2_planner.py, q2_config.py, q2_ros_node.py and launch/q2.launch.py.
+  Shared Q1 mapping, footprint inflation, TF handling, ROS conversions and CLI.
+  Retained discrete velocity choices, exact differential-drive propagation,
+  XY nearest-neighbor metric, arc collision checks, tau=0.5, and control backtracking.
+  Q2 executes the selected velocity sequence; it does not use Q1 path tracking.
+  Planning starts with an unknown map and uses only clipped 1 m LiDAR observations.
+
+  Build: colcon build --symlink-install --packages-select q1_navigation -> success.
+  Executables: q1_navigation q1_navigation; q1_navigation q2_navigation.
+  Verified Q2 --help and q2.launch.py --show-args; same start/goal arguments as Q1.
+  Final colcon test / colcon test-result: 31 tests, 0 errors, 0 failures, 0 skipped.
+  Includes control-sequence replay, arc collisions, negative origins/custom goals,
+  unknown-space rejection, bounded failure, tau switching, stale-input cancellation,
+  execution-deviation replanning, future obstacles and timeout-stop clearance.
+
+  Isolated headless Gazebo empty world, Waffle Pi, ROS_DOMAIN_ID=80, port 11380:
+  start=(1,1,0); goal rectangle=(2.2,1.2,0.3,0.3).
+  Received 65 scans, 383 odometry messages, 54 maps, 8 nonempty paths,
+  111 velocity messages, including 60 with nonzero linear speed.
+  Goal reached; final odometry=(2.245647,1.299183), final velocity=(0,0).
+  All emitted velocity pairs belonged to the original discrete control set.
+  8 planning attempts, 7 replans due to execution deviation, travelled=1.270 m.
+  Completed controls each lasted 0.5 simulated seconds in this run.
+  Interrupted controls lasted 0.1-0.5 s; each has its actual duration and reason
+  in the controls CSV. The final control was interrupted on goal entry at 0.4 s.
+  These interruptions show the effect of model/execution mismatch; they are not
+  counted as completed tau-long controls.
+  All smoke-test processes were stopped afterward.
+
+  Q1 regression smoke after sharing ROS interfaces:
+  22 scans, 135 odometry messages, 12 maps, 1 path, 27 velocity messages;
+  displacement=0.226851 m; final velocity=(0,0); speed limits respected.
+
+  Q2-specific limits: this nearby-goal empty-world test is not the required
+  four-environment comparison. Complex-scene success, collision rate, replanning
+  statistics, videos and comparisons remain for the partner's experiments.
+  Q2 settings: q1_navigation/q2_config.py.
+  Q2 logs: ~/.ros/q2_navigation/*csv (planning and actual control durations).
+
+Module separation and negative map origin (2026-11-06):
+  Package name and both executable names remain unchanged.
+  Q1 uses q1_config/control/mapping/planner/ros_node/ros_utils.py.
+  Q2 uses q2_config/control/mapping/planner/ros_node/ros_utils.py.
+  Q2 no longer imports Q1 modules or inherits Q1NavigationNode.
+  Q1 ROS node/helpers restored to their pre-Q2 versions; Q1 configuration now
+  uses the negative map origin requested by the user.
+  Both configurations: origin=(-5,-5), width=height=10,
+  start=(-4,-4,0), goal rectangle=(4,4,0.7,0.7).
+  Q1 frame=q1_map; Q2 frame=q2_map. Input topics and cmd_vel still refer to
+  the same robot, so run one navigation algorithm at a time.
+
+  colcon build: success.
+  colcon test / colcon test-result after origin update:
+  34 tests, 0 errors, 0 failures, 0 skipped.
+  Added independent-configuration check; delayed-TF regressions cover both nodes.
+  Fresh Python process imported Q2 node with no q1_navigation.q1_* modules loaded.
+  Verified Q2 CLI defaults and q2 launch entry.
+
+  Q2 Gazebo launch check: spawn=(-4,-4), start defaults=(-4,-4,0),
+  nearby test goal=(-2.8,-3.8,0.3,0.3). This is not the default far-away goal.
+  219 scans, 1283 odometry messages, 205 maps, 41 nonempty paths,
+  419 commands (125 nonzero linear velocity).
+  Confirmed map origin=(-5,-5), map/path frame=q2_map.
+  Goal reached; final odometry=(-2.606925,-3.534274); final velocity=(0,0).
+  All velocity pairs belonged to the configured discrete control set.
+  40 replans, travelled=2.267 m. Frequent execution-deviation replanning remains
+  a limitation to assess in the partner's formal obstacle-world experiments.
+
+  Q1 Gazebo regression with negative-coordinate defaults:
+  23 scans, 136 odometry messages, 12 maps, 1 path, 27 commands;
+  displacement=0.232088 m; final velocity=(0,0); speed limits respected.
+  Confirmed map origin=(-5,-5), map/path frame=q1_map.
+  All isolated smoke-test processes were stopped afterward.
+
+Q2 execution fix (2026-11-06):
+  Partner log: 11 of the last 12 replans were execution_deviation, one was
+  future_trajectory_blocked; travelled distance advanced about 0.02 m per cycle.
+  Reproduced early cancellation with the local Waffle Pi's wheel-acceleration limit:
+  after a (v=0.25,w=1.82) command for 0.2 simulated seconds, measured heading
+  change was about 0.064 rad versus the ideal 0.364 rad. Even after aligning the
+  odometry timestamp, the 0.271 rad error exceeded the 0.25 rad threshold.
+  The old node cancelled the control before its intended 0.5 s duration.
+
+  Change: check model deviation before starting a control or after the full tau,
+  and compare predictions at the odometry timestamp. Input freshness and actual-pose
+  collision checks still run every control tick and may stop motion immediately.
+  Keep speed limits, tau, original discrete controls, radius, inflation and
+  deviation thresholds unchanged. Q1 code and both negative-origin configs unchanged.
+  Final colcon test / colcon test-result: 40 tests, 0 errors, 0 failures, 0 skipped.
+  Regressions cover acceleration lag through tau, timestamp-aligned feedback,
+  immediate mid-control obstacle stop, success/failure cooldown, first-control
+  executability, and explicit failure when no local control is safe.
+  Failed plans retain retry cooldown; replacing a successful plan no longer waits
+  for that cooldown. First-control candidates must pass the execution-layer known-free
+  horizon; otherwise return local_motion_blocked. Terminal logs include trigger/error.
+
+  Gazebo nearby-goal test after fix:
+  start=(-4,-4,0), goal=(-2.8,-3.8,0.3,0.3), empty world.
+  Goal reached; 8 replans; travelled=1.693 m; final velocity=(0,0).
+  15 completed controls, all lasting 0.5 simulated seconds.
+
+  Gazebo obstacle test after fix:
+  Same start, goal=(-2.1,-2.1,0.4,0.4); 0.6 m square box centered at (-3,-3)
+  blocks the direct start-to-goal segment. Navigation only receives LiDAR/odom/TF.
+  Goal reached; 34 replans; travelled=3.691 m; final velocity=(0,0).
+  Minimum sampled center-to-box clearance=0.363468 m, above the modeled 0.25 m radius.
+  Both runs respected the original discrete command set and negative map origin.
+  All isolated test processes stopped afterward.
+
+  These checks address the reproduced premature-cancellation loop. They do not
+  guarantee all unknown environments are solvable. Model mismatch still causes
+  replanning; partner must retest the original scene. No obstacle truth was supplied
+  to the planner, and unknown-space/safety checks were not disabled.
+
+Quiet navigation logs (2026-11-06):
+  Removed all application warning calls: Q1/Q2 TF waiting and Q2 input waiting.
+  TF exception handling, pending-scan retention, input timeout stops and collision
+  checks remain in place. ROS/Gazebo may still emit their own framework messages.
+  After removing warning output: 40 tests, 0 errors, 0 failures, 0 skipped.
