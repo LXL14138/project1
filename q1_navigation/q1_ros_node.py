@@ -5,6 +5,7 @@ import math
 from pathlib import Path as FilePath
 import sys
 
+
 import rclpy
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
@@ -15,6 +16,7 @@ from rclpy.time import Time
 from rclpy.utilities import remove_ros_args
 from sensor_msgs.msg import LaserScan
 from tf2_ros import Buffer, StaticTransformBroadcaster, TransformException, TransformListener
+
 
 from . import q1_config as C
 from .q1_control import anchor_transform, command_safe, compose, tracking_command
@@ -29,8 +31,7 @@ class Q1NavigationNode(Node):
         super().__init__('q1_navigation')
         self.start_pose = tuple(start) if start is not None else (C.START_X, C.START_Y, C.START_YAW)
         self.goal = tuple(goal) if goal is not None else C.GOAL
-        self.grid = GridMap(C.WORLD_WIDTH, C.WORLD_HEIGHT, C.GRID_RESOLUTION,
-                            (C.MAP_ORIGIN_X, C.MAP_ORIGIN_Y))
+        self.grid = GridMap(C.WORLD_WIDTH, C.WORLD_HEIGHT, C.GRID_RESOLUTION,(C.MAP_ORIGIN_X, C.MAP_ORIGIN_Y))
         self.pose = self.offset = self.collision = self.pending_scan = None
         self.odom_frame = self.base_frame = None
         self.odom_stamp = self.scan_stamp = -math.inf
@@ -39,6 +40,7 @@ class Q1NavigationNode(Node):
         self.previous_pose = None
         self.last_plan_time = -math.inf
         self.finished = False
+        
         self.trajectory, self.plans = [], []
         self.run_status = 'Interrupted'
         self.result_path = next_result_path('q1')
@@ -49,10 +51,8 @@ class Q1NavigationNode(Node):
         self.cmd_pub = self.create_publisher(Twist, C.CMD_VEL_TOPIC, 10)
         self.map_pub = self.create_publisher(OccupancyGrid, '/q1/map', retained)
         self.path_pub = self.create_publisher(Path, '/q1/path', retained)
-        self.odom_sub = self.create_subscription(Odometry, C.ODOM_TOPIC, self.on_odom,
-                                                  qos_profile_sensor_data)
-        self.scan_sub = self.create_subscription(LaserScan, C.SCAN_TOPIC, self.on_scan,
-                                                  qos_profile_sensor_data)
+        self.odom_sub = self.create_subscription(Odometry, C.ODOM_TOPIC, self.on_odom, qos_profile_sensor_data)
+        self.scan_sub = self.create_subscription(LaserScan, C.SCAN_TOPIC, self.on_scan, qos_profile_sensor_data)
         log_dir = FilePath(C.LOG_DIRECTORY).expanduser()
         log_dir.mkdir(parents=True, exist_ok=True)
         self.log_path = log_dir / (datetime.now().strftime('%Y%m%d_%H%M%S_%f') + '.csv')
@@ -83,6 +83,7 @@ class Q1NavigationNode(Node):
         odom_pose = (p.x, p.y, quaternion_yaw(q))
         if not all(math.isfinite(v) for v in odom_pose):
             return
+            
         if self.offset is None:
             self.odom_frame, self.base_frame = msg.header.frame_id, msg.child_frame_id
             self.offset = anchor_transform(odom_pose, self.start_pose)
@@ -99,6 +100,7 @@ class Q1NavigationNode(Node):
         self.pose = compose(self.offset, odom_pose)
         if self.previous_pose is not None:
             self.distance += math.dist(self.pose[:2], self.previous_pose[:2])
+            
         self.previous_pose, self.odom_stamp = self.pose, stamp
         if not self.trajectory or math.dist(self.pose[:2], self.trajectory[-1][:2]) > 0.01:
             self.trajectory.append(self.pose)
@@ -107,10 +109,13 @@ class Q1NavigationNode(Node):
         stamp = self.seconds(msg.header.stamp)
         if not msg.header.frame_id or stamp <= self.scan_stamp:
             return
+
         if (self.pending_scan is None or
                 stamp - self.seconds(self.pending_scan.header.stamp) >= C.INPUT_TIMEOUT):
             self.pending_scan = msg
 
+
+    
     def update_map(self):
         if self.pending_scan is None or self.pose is None:
             return
